@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "archeria-70635-a17c8",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
