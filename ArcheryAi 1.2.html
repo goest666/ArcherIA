@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Análisis de postura - Arquería</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --text:#1a1a1a; --muted:#6b6b6b; --accent:#2e7d32; --border:#e0e0e0; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#121212; --card:#1e1e1e; --text:#f0f0f0; --muted:#a0a0a0; --border:#333; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:calc(24px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size:1.3rem; margin-bottom:4px; }
+  p.subtitle { color:var(--muted); margin-top:0; text-align:center; max-width:420px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; width:100%; max-width:440px; text-align:center; }
+  .side-select { margin-bottom:18px; }
+  .side-q { font-size:.88rem; color:var(--muted); margin:0 0 8px; }
+  .side-buttons { display:flex; gap:10px; justify-content:center; }
+  .side-btn, .refbox button {
+    padding:10px 18px; border-radius:10px; border:2px solid var(--accent);
+    background:transparent; color:var(--accent); font-weight:600; font-size:.9rem; cursor:pointer;
+  }
+  .side-btn.active { background:var(--accent); color:#fff; }
+  input[type="file"] { display:none; }
+  label.upload-btn { display:inline-block; background:var(--accent); color:#fff; padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:600; transition:opacity .2s; }
+  label.upload-btn.disabled { opacity:.4; pointer-events:none; }
+  .hint { font-size:.78rem; color:var(--muted); margin:10px 0 0; }
+  #canvasWrap { margin-top:16px; display:none; }
+  #outputCanvas { max-width:100%; height:auto; display:block; border-radius:12px; background:#000; }
+  #status { color:var(--muted); font-size:.85rem; margin-top:10px; min-height:1.2em; }
+  #metrics { margin-top:12px; font-size:.9rem; text-align:left; }
+  .score { font-size:1rem; font-weight:700; margin-bottom:8px; }
+  .score .val { color:var(--accent); }
+  .metric-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
+  .dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+  .tips { margin-top:10px; font-size:.85rem; }
+  .tips ul { margin:4px 0 0; padding-left:18px; }
+  .warn { background:rgba(255,149,0,.12); border:1px solid rgba(255,149,0,.5); padding:8px 10px; border-radius:8px; font-size:.8rem; margin-bottom:8px; }
+  .note { font-size:.72rem; color:var(--muted); margin-top:10px; }
+  .refbox { display:none; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
+  .refbox button { padding:8px 12px; font-size:.8rem; border-width:1.5px; margin:3px; }
+  #refStatus { font-size:.75rem; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+  <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyDPNZK6fxeAz7NJj-gg6UqRU41kjuk7dLs",
+    authDomain: "archeria-70635.firebaseapp.com",
+    projectId: "archeria-70635",
+    storageBucket: "archeria-70635.firebasestorage.app",
+    messagingSenderId: "300679056554",
+    appId: "1:300679056554:web:5883217b421ed7beb054d3",
+    measurementId: "G-47GMNE5F15"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+  <h1>🏹 Análisis de postura</h1>
+  <p class="subtitle">Selecciona tu lado dominante y sube una foto en pleno anclaje</p>
+
+  <div class="card">
+    <div class="side-select">
+      <p class="side-q">¿Con qué mano jalas la cuerda?</p>
+      <div class="side-buttons">
+        <button type="button" class="side-btn" data-side="left">Izquierda</button>
+        <button type="button" class="side-btn" data-side="right">Derecha</button>
+      </div>
+    </div>
+
+    <label class="upload-btn disabled" id="uploadLabel" for="photoInput">Subir foto</label>
+    <input type="file" id="photoInput" accept="image/*">
+    <p class="hint">📷 Cuerpo completo, de frente al pecho del arquero y con el blanco hacia un lado, justo en el anclaje. Los ángulos asumen esa vista.</p>
+
+    <div id="canvasWrap"><canvas id="outputCanvas"></canvas></div>
+    <div id="status"></div>
+    <div id="metrics"></div>
+
+    <div class="refbox" id="refBox">
+      <button type="button" id="btnSetRef">📌 Usar esta foto como referencia correcta</button>
+      <button type="button" id="btnResetRef">↩︎ Rangos por defecto</button>
+      <div id="refStatus"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const input=$('photoInput'), uploadLabel=$('uploadLabel'), canvasWrap=$('canvasWrap'), canvas=$('outputCanvas'),
+          ctx=canvas.getContext('2d'), statusEl=$('status'), metricsEl=$('metrics'),
+          refBox=$('refBox'), refStatus=$('refStatus'), sideButtons=document.querySelectorAll('.side-btn');
+    const sourceCanvas=document.createElement('canvas'), sourceCtx=sourceCanvas.getContext('2d');
+    const MAX_DIM=1600, REF_KEY='archery_ref_v1';
+
+    let pose=null, dominantSide=null, lastLM=null, lastMeasure=null, ref=null;
+    try { ref = JSON.parse(localStorage.getItem(REF_KEY)); } catch (_) {}
+
+    // ---- Referencias por defecto (APROXIMADAS: lo ideal es calibrar con una foto de referencia) ----
+    // dir 'high' = mejor cuanto mayor (límite = lim mínimo) | 'low' = mejor cuanto menor (límite = lim máximo)
+    // margen = holgura alrededor de la referencia al calibrar | tol = desviación a partir de la cual se pinta 100 % rojo
+    const DEFAULTS = {
+      arco:    { label:'Brazo del arco (extensión)', unit:'°', dir:'high', lim:160, margen:8,  tol:30 },
+      codo:    { label:'Codo de tiro alineado',      unit:'°', dir:'high', lim:145, margen:10, tol:35 },
+      anclaje: { label:'Anclaje (mano → rostro)',    unit:'%', dir:'low',  lim:35,  margen:10, tol:50 },
+      hombros: { label:'Hombros nivelados',          unit:'°', dir:'low',  lim:6,   margen:4,  tol:20 },
+      torso:   { label:'Torso erguido',              unit:'°', dir:'low',  lim:6,   margen:4,  tol:20 }
+    };
+    const limit = k => {
+      const d = DEFAULTS[k], v = ref && ref.values && ref.values[k];
+      if (v == null) return d.lim;
+      return d.dir === 'high' ? v - d.margen : v + d.margen;
+    };
+    const deviation = (k, v) => v == null ? null : Math.max(0, DEFAULTS[k].dir === 'high' ? limit(k) - v : v - limit(k));
+
+    // ---------- Utilidades ----------
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const avg  = arr => arr.reduce((s, x) => s + x, 0) / arr.length;
+    const mid  = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    function angleAt(a, b, c) {                       // ángulo en b entre a y c (puntos en PÍXELES)
+      const abx=a.x-b.x, aby=a.y-b.y, cbx=c.x-b.x, cby=c.y-b.y;
+      const mAB=Math.hypot(abx,aby), mCB=Math.hypot(cbx,cby);
+      if (!mAB || !mCB) return null;
+      return Math.acos(Math.max(-1, Math.min(1, (abx*cbx+aby*cby)/(mAB*mCB)))) * 180 / Math.PI;
+    }
+    const colorFromDeviation = (dev, tol) => dev == null ? '#8888aa' : `hsl(${120 * (1 - Math.min(1, dev / tol))}, 85%, 45%)`;
+
+    // dominante = mano que jala la cuerda (derecha → brazo de cuerda derecho, brazo del arco izquierdo)
+    function getSideIndices(side) {
+      return side === 'right'
+        ? { bow:{shoulder:11, elbow:13, wrist:15}, string:{shoulder:12, elbow:14, wrist:16} }
+        : { bow:{shoulder:12, elbow:14, wrist:16}, string:{shoulder:11, elbow:13, wrist:15} };
+    }
+
+    // ---------- Medición (todo en píxeles: MediaPipe entrega x,y normalizados 0–1 y deforma los ángulos) ----------
+    function measure(lm, side) {
+      const W = canvas.width, H = canvas.height;
+      const P = i => ({ x: lm[i].x * W, y: lm[i].y * H });
+      const s = getSideIndices(side);
+      const bS=P(s.bow.shoulder), bE=P(s.bow.elbow), bW=P(s.bow.wrist), dS=P(s.string.shoulder), dE=P(s.string.elbow);
+      const sw = dist(bS, dS) || 1;
+      const centroid = ids => { const pts = ids.map(P); return { x: avg(pts.map(p => p.x)), y: avg(pts.map(p => p.y)) }; };
+      const HANDS = { right:[16,18,20,22], left:[15,17,19,21] };
+      const hc = centroid(HANDS[side]), hcOther = centroid(HANDS[side === 'right' ? 'left' : 'right']);
+      const mouth = mid(P(9), P(10)), ms = mid(P(11), P(12)), mh = mid(P(23), P(24));
+
+      let a = Math.atan2(P(12).y - P(11).y, P(12).x - P(11).x) * 180 / Math.PI;
+      if (a > 90) a -= 180; if (a < -90) a += 180;
+
+      const values = {
+        arco:    angleAt(bS, bE, bW),                 // extensión del codo del brazo del arco
+        codo:    angleAt(bS, dS, dE),                 // 180° = codo de tiro sobre la línea de hombros/flecha
+        anclaje: dist(hc, mouth) / sw * 100,          // % del ancho de hombros
+        hombros: Math.abs(a),                         // inclinación de la línea de hombros
+        torso:   Math.abs(Math.atan2(ms.x - mh.x, mh.y - ms.y) * 180 / Math.PI)  // inclinación vs vertical
+      };
+      const NAMES = {11:'hombros',12:'hombros',13:'codos',14:'codos',15:'muñecas',16:'muñecas',23:'cadera',24:'cadera'};
+      const lowVis = [...new Set(Object.keys(NAMES).filter(i => (lm[i].visibility ?? 1) < 0.5).map(i => NAMES[i]))];
+      const otherCloser = dist(hcOther, mouth) < 0.7 * dist(hc, mouth);
+      return { values, pts:{bS,bE,bW,dS,dE,hc,mouth,ms,mh}, lowVis, otherCloser };
+    }
+
+    // ---------- Render ----------
+    function renderAll() {
+      if (!lastLM) return;
+      const W = canvas.width, H = canvas.height, u = Math.max(W, H) / 600;
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(sourceCanvas, 0, 0);
+
+      const m = measure(lastLM, dominantSide || 'right'); lastMeasure = m;
+      const { bS,bE,bW,dS,dE,hc,mouth,ms,mh } = m.pts;
+      const keys = Object.keys(DEFAULTS), dev = {}, col = {};
+      keys.forEach(k => { dev[k] = deviation(k, m.values[k]); col[k] = colorFromDeviation(dev[k], DEFAULTS[k].tol); });
+
+      drawConnectors(ctx, lastLM, POSE_CONNECTIONS, { color:'#ffffff66', lineWidth:1.5*u });
+      drawLandmarks(ctx, lastLM, { color:'#ffffff66', radius:1.5*u });
+
+      const line = (a, b, c, w) => { ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.strokeStyle=c; ctx.lineWidth=w; ctx.lineCap='round'; ctx.stroke(); };
+      const dot  = (p, c, r) => { ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fillStyle=c; ctx.fill(); };
+      const ext  = (a, b, f) => ({ x: b.x + (b.x-a.x)*f, y: b.y + (b.y-a.y)*f });
+      const label = (p, t, c) => {
+        ctx.font = `bold ${15*u}px -apple-system,system-ui,sans-serif`; ctx.lineJoin = 'round';
+        ctx.lineWidth = 4*u; ctx.strokeStyle = '#000'; ctx.fillStyle = c;
+        ctx.strokeText(t, p.x + 8*u, p.y - 8*u); ctx.fillText(t, p.x + 8*u, p.y - 8*u);
+      };
+
+      // línea guía punteada: hombros → hacia donde debería ir el codo de tiro (línea de la flecha)
+      ctx.setLineDash([8*u, 6*u]); line(ext(dS,bS,0.15), ext(bS,dS,0.75), '#ffffffcc', 1.5*u); ctx.setLineDash([]);
+
+      line(bS,bE,col.arco,5*u); line(bE,bW,col.arco,5*u);          // brazo del arco
+      line(dS,dE,col.codo,5*u);                                    // brazo de cuerda (alineación del codo)
+      line(dE,hc,col.anclaje,5*u); line(hc,mouth,col.anclaje,2.5*u); // antebrazo + distancia mano → rostro
+      line(bS,dS,col.hombros,5*u);                                 // línea de hombros
+      line(ms,mh,col.torso,5*u);                                   // torso
+      [[bE,col.arco],[dE,col.codo],[hc,col.anclaje],[bS,col.hombros],[dS,col.hombros]].forEach(([p,c]) => dot(p,c,5*u));
+      dot(mouth, '#fff', 3*u);
+
+      const v = m.values;
+      if (v.arco != null)    label(bE, Math.round(v.arco) + '°', col.arco);
+      if (v.codo != null)    label(dS, Math.round(v.codo) + '°', col.codo);
+      label(mid(hc, mouth), Math.round(v.anclaje) + '%', col.anclaje);
+
+      // ---- Retroalimentación ----
+      const scores = keys.map(k => 1 - Math.min(1, (dev[k] ?? DEFAULTS[k].tol) / DEFAULTS[k].tol));
+      const overall = Math.round(avg(scores) * 100);
+      const nivel = overall>=85 ? 'Excelente' : overall>=65 ? 'Buena' : overall>=40 ? 'Necesita ajustes' : 'Requiere corrección';
+      const level = k => dev[k]==null ? 'bad' : dev[k] <= DEFAULTS[k].tol*0.15 ? 'ok' : dev[k] <= DEFAULTS[k].tol*0.5 ? 'warn' : 'bad';
+      const icon = { ok:'✅', warn:'⚠️', bad:'🔴' };
+      const val   = k => v[k]==null ? '—' : v[k].toFixed(DEFAULTS[k].unit==='%' ? 0 : 1) + DEFAULTS[k].unit;
+      const ideal = k => (DEFAULTS[k].dir==='high' ? '≥ ' : '≤ ') + limit(k).toFixed(0) + DEFAULTS[k].unit;
+
+      const TIPS = {
+        arco: 'Extiende más el brazo del arco (sin bloquear el codo) y empuja hacia el blanco.',
+        codo: dE.y < dS.y ? 'El codo de tiro queda por encima de la línea de hombros; bájalo hasta alinearlo con la flecha.'
+                          : 'El codo de tiro está caído; súbelo hasta alinearlo con la línea de hombros y la flecha.',
+        anclaje: 'La mano de cuerda queda lejos del rostro; busca un punto de anclaje firme y repetible (mandíbula/barbilla).',
+        hombros: 'Nivela los hombros: evita encoger el hombro del arco.',
+        torso: 'Mantén el torso erguido: no te inclines hacia el blanco ni hacia atrás.'
+      };
+      const tips = keys.filter(k => level(k) !== 'ok').map(k => TIPS[k]);
+      const warns = [];
+      if (m.lowVis.length) warns.push(`No se ven bien: ${m.lowVis.join(', ')}. Usa una foto de cuerpo completo, con buena luz y sin obstáculos.`);
+      if (m.otherCloser) warns.push('La otra mano está más cerca del rostro: ¿elegiste bien tu lado dominante?');
+
+      metricsEl.innerHTML = `
+        ${warns.map(w => `<div class="warn">⚠️ ${w}</div>`).join('')}
+        <div class="score">Postura general: <span class="val">${overall}%</span> — ${nivel}</div>
+        ${keys.map(k => `
+          <div class="metric-row">
+            <span class="dot" style="background:${col[k]}"></span>
+            <span>${icon[level(k)]} <b>${DEFAULTS[k].label}:</b> ${val(k)} <span style="color:var(--muted)">(ideal ${ideal(k)})</span></span>
+          </div>`).join('')}
+        ${tips.length ? `<div class="tips"><b>Sugerencias:</b><ul>${tips.map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
+        <div class="note">Referencia de apoyo para entrenamiento, no un diagnóstico. Los ángulos son 2D y dependen de la posición de la cámara.</div>`;
+
+      statusEl.textContent = 'Análisis completo.';
+      refBox.style.display = 'block';
+      refStatus.textContent = ref
+        ? `Referencia personalizada activa (guardada el ${ref.date}).`
+        : 'Usando rangos por defecto (aproximados). Sube una foto de postura correcta y úsala como referencia.';
+    }
+
+    // ---------- Eventos ----------
+    sideButtons.forEach(btn => btn.addEventListener('click', () => {
+      dominantSide = btn.dataset.side;
+      sideButtons.forEach(b => b.classList.toggle('active', b === btn));
+      uploadLabel.classList.remove('disabled');
+      renderAll();                                   // re-evalúa sin pedir nueva foto
+    }));
+    $('btnSetRef').addEventListener('click', () => {
+      if (!lastMeasure) return;
+      ref = { values: { ...lastMeasure.values }, date: new Date().toLocaleDateString('es-MX') };
+      try { localStorage.setItem(REF_KEY, JSON.stringify(ref)); } catch (_) {}
+      renderAll();
+    });
+    $('btnResetRef').addEventListener('click', () => {
+      ref = null;
+      try { localStorage.removeItem(REF_KEY); } catch (_) {}
+      renderAll();
+    });
+
+    // ---------- Imagen + MediaPipe ----------
+    async function loadBitmap(file) {
+      if ('createImageBitmap' in window) {
+        try { return await createImageBitmap(file, { imageOrientation:'from-image' }); } catch (_) {}
+      }
+      return await new Promise((resolve, reject) => {
+        const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file);
+      });
+    }
+    const fitSize = (w, h, max) => { const m = Math.max(w, h); if (m <= max) return { w, h }; const s = max / m; return { w:Math.round(w*s), h:Math.round(h*s) }; };
+
+    async function ensurePose() {
+      if (pose) return;
+      if (typeof Pose === 'undefined') throw new Error('No se pudo cargar MediaPipe (revisa tu conexión a internet).');
+      pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+      pose.setOptions({ modelComplexity:1, smoothLandmarks:false, enableSegmentation:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5 });
+      pose.onResults(onResults);
+      statusEl.textContent = 'Cargando modelo (solo la primera vez)…';
+      await pose.initialize();
+    }
+    function onResults(r) {
+      lastLM = r.poseLandmarks || null;
+      if (!lastLM) {
+        statusEl.textContent = 'No se detectó una persona. Prueba con otra foto de cuerpo completo.';
+        metricsEl.innerHTML = ''; refBox.style.display = 'none';
+        return;
+      }
+      renderAll();
+    }
+
+    input.addEventListener('change', async e => {
+      if (!dominantSide) { statusEl.textContent = 'Primero selecciona tu lado dominante.'; return; }
+      const file = e.target.files[0];
+      if (!file) return;
+      uploadLabel.classList.add('disabled');
+      statusEl.textContent = 'Cargando imagen…'; metricsEl.innerHTML = ''; refBox.style.display = 'none'; lastLM = null;
+      try {
+        const source = await loadBitmap(file);
+        const { w, h } = fitSize(source.width || source.naturalWidth, source.height || source.naturalHeight, MAX_DIM);
+        sourceCanvas.width = w; sourceCanvas.height = h; sourceCtx.drawImage(source, 0, 0, w, h);
+        canvas.width = w; canvas.height = h; ctx.drawImage(sourceCanvas, 0, 0);
+        canvasWrap.style.display = 'block';
+
+        await ensurePose();
+        if (typeof pose.reset === 'function') pose.reset();   // evita arrastrar el estado de la foto anterior
+        statusEl.textContent = 'Analizando postura…';
+        await pose.send({ image: sourceCanvas });
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error: ' + (err.message || err);
+      } finally {
+        uploadLabel.classList.remove('disabled');
+        input.value = '';                                     // permite volver a subir la misma foto
+      }
+    });
+  </script>
+</body>
+</html>
